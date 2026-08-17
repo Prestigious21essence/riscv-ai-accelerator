@@ -14,4 +14,4 @@ architectures, developed under Prof. Amartansh Dubey.
 Early development — RV32I core in progress.
 
 ## Reference
-Architecture studied via vortexgpgpu/vortex (not forked/copied).
+Architecture studied via vortexgpgpu/vortex.
