@@ -1,7 +1,7 @@
 # RISC-V AI Accelerator RTL
 
 RISC-V RTL implementation exploring pipelined and superscalar/VLIW-like
-architectures, developed under Prof. Amartansh Dubey.
+architectures, developed under Prof. Ashwin.
 
 ## Scope
 - RV32I: base pipelined scalar core
