@@ -29,6 +29,9 @@ module tb_register_file;
 
     initial begin
         we = 0; rs1_addr = 0; rs2_addr = 0; rd_addr = 0; rd_data = 0;
+	
+	$dumpfile("dump.vcd");
+	$dumpvars(0, tb_register_file);	
 
         // Drive inputs on negedge so they're stable before the next posedge
         @(negedge clk);

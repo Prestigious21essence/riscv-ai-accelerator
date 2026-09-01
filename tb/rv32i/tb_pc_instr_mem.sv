@@ -9,7 +9,7 @@ module tb_pc_instr_mem;
     int errors = 0;
 
     pc pc_dut (
-        .clk(clk), .rst(rst), .pc_out(pc_out)
+        .clk(clk), .rst(rst), .jump(1'b0), .imm(32'd0), .pc_out(pc_out)
     );
 
     instruction_memory imem_dut (

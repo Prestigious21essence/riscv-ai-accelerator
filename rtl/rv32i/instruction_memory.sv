@@ -10,5 +10,9 @@ module instruction_memory #(
         $readmemh("instr_mem.hex", mem);
     end
 
-    assign instr = mem[addr[9:2]];   // word-aligned index into 256 words
+    // word-aligned index sized to MEM_WORDS (was hardcoded addr[9:2], which
+    // silently ignored MEM_WORDS above 256 -- see ARCH_TEST_PLAN.md)
+    localparam IDX_HI = $clog2(MEM_WORDS) + 1;
+
+    assign instr = mem[addr[IDX_HI:2]];
 endmodule
