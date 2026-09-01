@@ -11,3 +11,10 @@ sim_build/
 .vscode/
 .DS_Store
 *.swp
+
+# Verilator build output / traces
+obj_dir*/
+dump.vcd
+dump.json
+instr_mem.hex
+data_mem.hex
