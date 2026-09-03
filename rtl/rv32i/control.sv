@@ -10,6 +10,7 @@ module control (
     output logic       branch,
     output logic       lui,
     output logic       jal,
+    output logic       jalr,
     output logic       auipc,
     output logic [3:0] alu_op
 );
@@ -22,6 +23,7 @@ module control (
         branch     = 1'b0;
         lui        = 1'b0;
         jal        = 1'b0;
+        jalr       = 1'b0;
         auipc      = 1'b0;
         alu_op     = 4'b0000;
 
@@ -70,8 +72,20 @@ module control (
                 alu_op    = 4'b0000;
             end
             7'b1100011: begin
+                // Branch comparison depends on funct3, not just "subtract":
+                // BEQ/BNE (000/001) read the SUB result's zero flag; BLT/BGE
+                // (100/101) need a signed less-than; BLTU/BGEU (110/111) need
+                // an unsigned less-than. Whether the branch is actually taken
+                // (zero vs !zero, slt vs !slt) is resolved downstream in
+                // rv32i_core from this alu_op choice plus funct3 -- control
+                // only picks which comparison the ALU performs.
                 branch  = 1'b1;
-                alu_op  = 4'b0001;
+                case (funct3)
+                    3'b000, 3'b001: alu_op = 4'b0001;  // BEQ/BNE -> SUB (zero flag)
+                    3'b100, 3'b101: alu_op = 4'b1000;  // BLT/BGE -> SLT (signed)
+                    3'b110, 3'b111: alu_op = 4'b1001;  // BLTU/BGEU -> SLTU (unsigned)
+                    default:        alu_op = 4'b0001;
+                endcase
             end
             7'b0110111: begin  // LUI: rd = imm (ALU computes 0 + imm; A-input forced to 0 in rv32i_core)
                 reg_write = 1'b1;
@@ -82,6 +96,12 @@ module control (
             7'b1101111: begin  // JAL: rd = pc+4, pc = pc + J-imm
                 reg_write = 1'b1;
                 jal       = 1'b1;
+            end
+            7'b1100111: begin  // JALR: rd = pc+4, pc = (rs1 + I-imm) & ~1
+                reg_write = 1'b1;
+                alu_src   = 1'b1;   // ALU computes rs1 + imm (target, before LSB clear)
+                jalr      = 1'b1;
+                alu_op    = 4'b0000;
             end
             7'b0010111: begin  // AUIPC: rd = pc + imm (ALU computes pc + imm; A-input forced to pc_out in rv32i_core)
                 reg_write = 1'b1;

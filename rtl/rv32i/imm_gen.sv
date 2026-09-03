@@ -7,7 +7,7 @@ module imm_gen (
 
     always_comb begin
         case (opcode)
-            7'b0010011, 7'b0000011:
+            7'b0010011, 7'b0000011, 7'b1100111:  // I-type ALU/loads, and JALR (I-type)
                 imm = {{20{instr[31]}}, instr[31:20]};
             7'b0100011:
                 imm = {{20{instr[31]}}, instr[31:25], instr[11:7]};
