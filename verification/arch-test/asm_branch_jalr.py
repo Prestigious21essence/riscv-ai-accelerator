@@ -65,7 +65,11 @@ prog.append(("addi x18,x0,999 [skip]", itype(999, 0, 0b000, 18, OPIMM)))        
 prog.append(("addi x19,x0,888",     itype(888, 0, 0b000, 19, OPIMM)))              # 0x6C
 prog.append(("jal  x0,0  (halt self-loop)", jtype(0, 0, JAL)))                     # 0x70
 
-with open("/tmp/work/riscv-ai-accelerator/tb/rv32i/instr_mem_branch_jalr.hex", "w") as f:
+import os
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = os.path.join(HERE, "..", "..", "tb", "rv32i", "instr_mem_branch_jalr.hex")
+
+with open(OUT, "w") as f:
     for i, (name, code) in enumerate(prog):
         f.write(f"{code & 0xFFFFFFFF:08x}\n")
         print(f"{i*4:#04x}: {code & 0xFFFFFFFF:08x}  {name}")
