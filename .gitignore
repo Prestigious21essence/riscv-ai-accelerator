@@ -14,7 +14,9 @@ sim_build/
 
 # Verilator build output / traces
 obj_dir*/
+build/
 dump.vcd
 dump.json
+cycle_dump.json
 instr_mem.hex
 data_mem.hex
