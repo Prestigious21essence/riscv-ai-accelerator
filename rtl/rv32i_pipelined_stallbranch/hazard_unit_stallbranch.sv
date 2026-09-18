@@ -92,11 +92,12 @@ module hazard_unit_stallbranch (
             flush_id_ex = 1'b1;
         end else if (ex_branch_or_jump) begin
             // Branch/jump is resolving in EX this cycle.
-            // Enable PC update to the resolved target/fallthrough address.
-            // Insert bubble in IF/ID so pipeline cleanly receives the target next cycle.
+            // Enable PC update to the resolved target/fallthrough address at clock edge.
+            // Instruction fetch remains stalled: do NOT fetch into IF/ID, and do NOT flush.
+            // IF/ID holds the bubble cleanly without fetching or flushing.
             pc_write    = 1'b1;
-            if_id_write = 1'b1;
-            flush_if_id = 1'b1;
+            if_id_write = 1'b0;
+            flush_if_id = 1'b0;
             flush_id_ex = 1'b0;
         end else if (id_branch_or_jump) begin
             // Branch/jump just arrived in ID.

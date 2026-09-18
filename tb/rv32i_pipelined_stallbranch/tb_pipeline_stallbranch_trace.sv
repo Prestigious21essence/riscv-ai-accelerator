@@ -93,8 +93,8 @@ module tb_pipeline_stallbranch_trace #(
         // Hazard unit summary
         $fwrite(fd, "    \"hazards\": {\"load_use_stall\": %s, \"branch_flush\": %s, \"branch_stall\": %s, \"flush_if_id\": %s, \"flush_id_ex\": %s, \"forward_a\": %0d, \"forward_b\": %0d},\n",
             ((!core_dut.pc_write) && core_dut.flush_id_ex) ? "true" : "false",
-            core_dut.ex_branch_or_jump ? "true" : "false",
-            core_dut.id_branch_or_jump ? "true" : "false",
+            "false",
+            (core_dut.id_branch_or_jump || core_dut.ex_branch_or_jump) ? "true" : "false",
             core_dut.flush_if_id ? "true" : "false",
             core_dut.flush_id_ex ? "true" : "false",
             core_dut.forward_a, core_dut.forward_b);
@@ -139,7 +139,7 @@ module tb_pipeline_stallbranch_trace #(
             // Early termination check on self-loop jal x0, 0 or ebreak
             if (tb_wb_instr == 32'h0000006f || tb_wb_instr == 32'h00100073) begin
                 drain_cycles++;
-                if (drain_cycles >= 4) break;
+                if (drain_cycles >= 1) break;
             end
         end
 
