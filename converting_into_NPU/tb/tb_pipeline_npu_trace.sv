@@ -5,7 +5,7 @@
 // Description:
 //   Simulates the combined CPU + NPU system, capturing cycle-by-cycle
 //   telemetry from both the 5-stage CPU pipeline and the NPU coprocessor,
-//   serializing it to cycle_dump_npu.json for the interactive visualizer.
+//   serializing it to cycle_dump_npu.json for cycle-accurate analysis.
 // =============================================================================
 
 `timescale 1ns / 1ps

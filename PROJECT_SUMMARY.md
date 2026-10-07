@@ -2,7 +2,7 @@
 
 **Project Lead / Architect**: Advised under Prof. Ashwin  
 **Repository**: `riscv-ai-accelerator`  
-**Status**: Single-Cycle Core Verified | 5-Stage Speculative Pipeline Verified | 5-Stage Always-Stall Pipeline Verified | Interactive Dual-Core Telemetry Visualizer Operational  
+**Status**: Single-Cycle Core Verified | 5-Stage Speculative Pipeline Verified | 5-Stage Always-Stall Pipeline Verified | MMIO NPU Coprocessor Verified  
 **Compliance**: **38/38 PASS (100%)** on official RISC-V Architectural Compliance Test Suite (`riscv-arch-test`) vs. Spike golden reference across all cores.
 
 ---
@@ -25,23 +25,20 @@
    - [4.3 Priority Hazard Arbitration Logic](#43-priority-hazard-arbitration-logic)
    - [4.4 Microarchitectural Comparison: Speculative vs. Always-Stall](#44-microarchitectural-comparison-speculative-vs-always-stall)
    - [4.5 Verification & Compliance Results](#45-verification--compliance-results)
-5. [Interactive Telemetry & Visualization System](#5-interactive-telemetry--visualization-system)
-   - [5.1 Telemetry Architecture & Cycle-Accurate Probing](#51-telemetry-architecture--cycle-accurate-probing)
-   - [5.2 Python Telemetry Engine & Microarchitectural Profiler](#52-python-telemetry-engine--microarchitectural-profiler)
-   - [5.3 Interactive Web Dashboard (`index.html`)](#53-interactive-web-dashboard-indexhtml)
-   - [5.4 Dual-Core Visualizer Presentation](#54-dual-core-visualizer-presentation)
-     - [Single-Cycle Datapath View](#single-cycle-datapath-view)
-     - [5-Stage Always-Stall Pipeline View](#5-stage-always-stall-pipeline-view)
-   - [5.5 Verified 18-Cycle Pipeline Execution Gantt Timeline](#55-verified-18-cycle-pipeline-execution-gantt-timeline)
+5. [Cycle-Accurate Pipeline Execution & Hazard Verification](#5-cycle-accurate-pipeline-execution--hazard-verification)
+   - [5.1 Verified 18-Cycle Pipeline Execution Gantt Timeline](#51-verified-18-cycle-pipeline-execution-gantt-timeline)
+   - [5.2 Cycle-by-Cycle Hazard Mechanics Breakdown](#52-cycle-by-cycle-hazard-mechanics-breakdown)
 6. [Repository Structure & File Organization](#6-repository-structure--file-organization)
 7. [Reproduction Commands & Verification Runbook](#7-reproduction-commands--verification-runbook)
-8. [Future Roadmap (Phase 2 & Phase 3)](#8-future-roadmap-phase-2--phase-3)
+   - [7.1 How to Test the CPU](#71-how-to-test-the-cpu)
+   - [7.2 How to Test the NPU](#72-how-to-test-the-npu)
+8. [Neural Processing Unit (NPU) Architecture & Hardware Acceleration](#8-neural-processing-unit-npu-architecture--hardware-acceleration)
 
 ---
 
 ## 1. Project Overview & Architectural Roadmap
 
-The **RISC-V AI Accelerator** project focuses on the clean-slate RTL design, hardware verification, and cycle-accurate performance analysis of high-efficiency RISC-V compute cores. The architecture is developed in SystemVerilog, targeting low-power embedded intelligence, machine learning edge acceleration, and high-throughput vector processing.
+The **RISC-V AI Accelerator** project focuses on the clean-slate RTL design, hardware verification, and cycle-accurate performance analysis of high-efficiency RISC-V compute cores. The architecture is developed in SystemVerilog, targeting low-power embedded intelligence, machine learning edge acceleration, and high-throughput matrix compute.
 
 ### Multi-Phase Engineering Trajectory
 ```
@@ -49,11 +46,13 @@ Phase 1: Scalar Foundations (COMPLETE)
   ├── 1. RV32I Single-Cycle Processor (rtl/rv32i/)
   ├── 2. RV32I 5-Stage Speculative Pipelined Core (rtl/rv32i_pipelined/)
   ├── 3. RV32I 5-Stage Always-Stall Pipelined Core (rtl/rv32i_pipelined_stallbranch/)
-  └── 4. Cycle-Accurate Dual-Core Interactive Telemetry Visualizer (tools/visualizer/)
+  └── 4. Cycle-Accurate Hazard & Telemetry Verification Engine
 
-Phase 2: Vector & Matrix Extensions (UPCOMING)
-  ├── RV32IV: RISC-V Vector extension integration (SIMD lanes, vector register file)
-  └── RV32IVMatrix: Dedicated 2D systolic/tensor accelerator unit for GEMM/convolution
+Phase 2: Neural Processing Unit (NPU) Coprocessor (COMPLETE)
+  ├── 1. Memory-Mapped I/O (MMIO) bus integration at 0x8000_0000
+  ├── 2. Dedicated on-chip SRAM buffers for Matrix A, B, and C (256x32 each)
+  ├── 3. High-throughput 32-bit Multiply-Accumulate (MAC) datapath (1 MAC/cycle)
+  └── 4. Bit-exact 32x32 tiled GEMM hardware-software co-simulation
 
 Phase 3: Advanced Execution Topologies (FUTURE)
   └── Multi-issue superscalar and VLIW-like execution clusters inspired by Vortex GPGPU
@@ -377,107 +376,11 @@ In `pipeline_regs.sv`, the synchronous clear input on `id_ex_reg` and `if_id_reg
 
 ---
 
-## 5. Interactive Telemetry & Modular Visualization System
+## 5. Cycle-Accurate Pipeline Execution & Hazard Verification
 
-Located in [`tools/visualizer/`](tools/visualizer/), this infrastructure provides real-time, cycle-by-cycle observability into both single-cycle and pipelined cores without modifying any core RTL files.
+The 5-stage pipeline behavior is verified with cycle-accurate probing at `negedge clk` across both normal execution and hazard conditions. This methodology verifies the exact cycle transitions through `IF ➔ ID ➔ EX ➔ MEM ➔ WB`, tracking register forwarding, load-use stall insertion, and non-speculative branch resolution.
 
-```
-  +-------------------------------------------------------------------------+
-  |                        Verilator RTL Simulation                         |
-  |      (rv32i_core.sv  /  rv32i_pipeline_stallbranch_core.sv)             |
-  +-------------------------------------------------------------------------+
-                                       |
-                                       | Cycle probes (IF, ID, EX, MEM, WB, Regs, Hazards)
-                                       v
-  +-------------------------------------------------------------------------+
-  |                   Telemetry Testbenches (*_trace.sv)                    |
-  |         Emits cycle snapshots at negedge clk to cycle_dump.json         |
-  +-------------------------------------------------------------------------+
-                                       |
-                                       | Raw cycle records
-                                       v
-  +-------------------------------------------------------------------------+
-  |               Python Telemetry Engine (trace_engine.py)                 |
-  | - Full RV32I disassembly of instruction machine words                   |
-  | - Hazard profiling (Load-use stalls, branch flushes, forwarding counts) |
-  | - Performance metrics computation (IPC, CPI, Efficiency %)              |
-  +-------------------------------------------------------------------------+
-                    |                                       |
-                    v                                       v
-  +-----------------------------------+   +------------------------------------+
-  |     Terminal ASCII Gantt View     |   |   Modular HTML5 / CSS3 / JS Engine |
-  |  (Printed to stdout instantly)    |   |     (build_visualizer.py -> JS)    |
-  | - Instruction-by-cycle grid       |   +------------------------------------+
-  | - Stall (-S-) & Bubble (-B-) tags |                     |
-  | - Summary performance card        |                     v
-  +-----------------------------------+   +------------------------------------+
-                                          | Standalone Browser UI (index.html) |
-                                          | - style.css (Dark responsive theme)|
-                                          | - pipeline_visualizer.js (Engine)  |
-                                          | - trace_data.js (Telemetry dataset)|
-                                          | - Interactive Gantt Chart          |
-                                          | - Pipeline Registers Inspector     |
-                                          | - Instruction Bitfield Decoder     |
-                                          | - Explicit Stage Inputs & Outputs  |
-                                          | - Live 32-Register Matrix (Pulse)  |
-                                          +------------------------------------+
-```
-
-### 5.1 Telemetry Architecture & Cycle-Accurate Probing
-
-- **Non-Intrusive RTL Probing**: Probes are instantiated in testbenches (`tb_singlecycle_trace.sv`, `tb_pipeline_stallbranch_trace.sv`) using hierarchical references and shadow pipeline registers to track instructions through `IF ➔ ID ➔ EX ➔ MEM ➔ WB`.
-- **Negedge Sampling**: Telemetry is captured strictly at `negedge clk`:
-  1. Synchronous state from the preceding `posedge clk` has stabilized.
-  2. Combinational logic (ALU, hazard detection, forwarding multiplexers, memory reads) has settled.
-  3. Cycle snapshot is serialized directly into `cycle_dump.json`.
-- **64K Word Memory Capacity**: To support large official architectural tests (`link_big.ld` section offsets), memory depth in `tb_pipeline_stallbranch_trace.sv` is set to `parameter MEM_WORDS = 65536`.
-
----
-
-### 5.2 Python Telemetry Engine & Microarchitectural Profiler
-
-[`tools/visualizer/trace_engine.py`](tools/visualizer/trace_engine.py):
-- **RV32I Machine Code Disassembler**: Complete decoding of all 32-bit RV32I opcodes, funct3, funct7, registers ($rs1, rs2, rd$), and sign-extended immediates.
-- **Instance-Based Instruction Tracking**: Uniquely tracks instruction instances through their physical lifecycle (`IF -> ID -> EX -> MEM -> WB`), eliminating ghost bubble rows or address-bus latch artifacts.
-- **Performance Accounting**:
-  $$\text{IPC} = \frac{\text{Retired Instructions}}{\text{Total Cycles}}, \quad \text{CPI} = \frac{\text{Total Cycles}}{\text{Retired Instructions}}, \quad \text{Efficiency} = \frac{\text{Retired Instructions}}{\text{Total Cycles}} \times 100\%$$
-
----
-
-### 5.3 Modular Web Dashboard Architecture
-
-The frontend visualization system is completely modularized for maintainability, separation of concerns, and clean extension:
-
-1. **`index.html`**: Clean, semantic HTML skeleton defining responsive CSS grid layouts for all telemetry cards, register matrix, pipeline stages, and Gantt charts without inline styling or inline JavaScript bloat.
-2. **`style.css`**: Dedicated dark modern theme stylesheet featuring CSS custom properties, responsive flexbox/grid layouts, glowing hazard/forwarding status badges, and green pulse animations on register writeback.
-3. **`pipeline_visualizer.js`**: Pure vanilla JavaScript visualizer engine providing:
-   - **Interactive Playback Controller**: Play, pause, step forward/backward, speed controls ($0.5\times$ to $5\times$), cycle scrubber slider, and keyboard shortcuts.
-   - **Interactive Gantt Chart**: Full cycle-by-cycle execution matrix tracking instruction flow through `IF`, `ID`, `EX`, `MEM`, and `WB`. Cells are color-coded per stage, show load-use stall tags (`ID*`), and display branch bubble markers (`-B-`). Clicking any cell immediately jumps the visualizer to that cycle.
-   - **Pipeline Registers Inspector**: Detailed breakdown of latched signals inside `IF/ID`, `ID/EX`, `EX/MEM`, and `MEM/WB` at each clock cycle (valid bits, latched PC, instruction word, operand register indices, and latched control words).
-   - **32-Bit Instruction Bitfield Decoder**: Comprehensive instruction dissection showing opcode, rd, rs1, rs2, funct3, funct7, sign-extended immediate (hex and dec), and instruction format classification (R-type, I-type, S-type, B-type, U-type, J-type).
-   - **Explicit Stage Inputs & Outputs Inspector**: Real-time card displaying exact inputs consumed, outputs generated, ALU operations, multiplexer routing, and forwarding sources at each stage (`IF`, `ID`, `EX`, `MEM`, `WB`).
-   - **Architectural Register Matrix**: 32-word register file with ABI names, live hexadecimal and signed decimal values, and pulse animations indicating active register updates at WB.
-   - **Event-Indexed Navigation**: Jump buttons (`jumpToNextStall`, `jumpToNextForward`, `jumpToNextBranch`) that index telemetry events and allow 1-click navigation to hazards.
-4. **`trace_data.js`**: JavaScript dataset generated by `build_visualizer.py` containing `window.PIPELINE_TRACE_DATA` and `window.SINGLECYCLE_TRACE_DATA`.
-5. **`build_visualizer.py`**: Automated compilation script that ingests `pipeline_trace.json` and `trace_singlecycle.json` and emits `trace_data.js`.
-
----
-
-### 5.4 Architectural Test Suite Visualizer Integration (`run_arch_visualizer.sh`)
-
-[`tools/visualizer/run_arch_visualizer.sh`](tools/visualizer/run_arch_visualizer.sh) provides a one-click bridge between the official RISC-V architectural compliance suite and the interactive visualizer:
-
-1. Takes any official compliance test name (e.g., `beq-01`, `add-01`, `bne-01`, `jal-01`).
-2. Automatically selects the appropriate linker script (`link.ld` or `link_big.ld` for large branch offsets).
-3. Compiles the assembly source using `riscv32-unknown-elf-gcc` and extracts `.text` via `riscv32-unknown-elf-objcopy`.
-4. Converts the binary to hexadecimal word format using `hex_convert.py`.
-5. Executes the simulation on `tb_pipeline_stallbranch_trace.sv` in Verilator.
-6. Parses cycle telemetry with `trace_engine.py` and compiles the dataset via `build_visualizer.py`.
-7. Instantly opens the visualizer or launches the local HTTP server.
-
----
-
-### 5.5 Verified 18-Cycle Pipeline Execution Gantt Timeline
+### 5.1 Verified 18-Cycle Pipeline Execution Gantt Timeline
 
 The non-speculative always-stall pipeline running [`instr_mem_stallbranch_demo.hex`](tb/rv32i_pipelined_stallbranch/instr_mem_stallbranch_demo.hex) completes in exactly **18 cycles**:
 
@@ -555,6 +458,23 @@ riscv-ai-accelerator/
 │       ├── rv32i_pipeline_stallbranch_core.sv # Top datapath with non-speculative branch stall
 │       └── hazard_unit_stallbranch.sv      # Priority hazard arbitration unit
 │
+├── converting_into_NPU/                    # Neural Processing Unit (NPU) Coprocessor Workspace
+│   ├── rtl/
+│   │   ├── npu_top.sv                      # Memory-mapped NPU coprocessor with on-chip SRAMs & MAC
+│   │   ├── rv32i_pipeline_stallbranch_core.sv # CPU core with MMIO bus interconnect at 0x8000_0000
+│   │   └── ...                             # Full SystemVerilog CPU+NPU RTL datapath
+│   ├── tb/
+│   │   ├── tb_npu_top.sv                   # Standalone NPU hardware unit verification (8 corner cases)
+│   │   ├── tb_pipeline_npu_core.sv         # Full-system CPU + NPU hardware-software co-simulation
+│   │   └── tb_pipeline_npu_benchmark32.sv  # End-to-end 32x32 tiled GEMM benchmark (1024 words)
+│   ├── tests/
+│   │   ├── npu_driver.h                    # High-level C hardware driver for MMIO registers & SRAMs
+│   │   ├── matmul_32_t2_s32_O2.c           # Real benchmark program for 32x32 matrix multiplication
+│   │   ├── gen_npu_test_hex.py             # Assembler generating tb/instr_mem_npu.hex
+│   │   └── gen_npu_benchmark32.py          # Assembler generating 32x32 benchmark program & datasets
+│   ├── run_tests.sh                        # Automated 7/7 comprehensive regression test runner
+│   └── TEST_RESULTS.md                     # Comprehensive cycle-accurate verification logs
+│
 ├── tb/
 │   ├── rv32i/                              # Single-cycle unit testbenches
 │   │   ├── instr_mem_all_types.hex         # 12-instruction comprehensive verification program
@@ -571,20 +491,6 @@ riscv-ai-accelerator/
 │       ├── tb_pipeline_stallbranch_trace.sv# Non-speculative telemetry probe (64K words)
 │       └── tb_pipeline_stallbranch_hazards.sv # Hazard verification testbench
 │
-├── tools/
-│   └── visualizer/                         # Cycle-Accurate Telemetry & Modular Visualizer Suite
-│       ├── index.html                      # Semantic HTML5 dashboard skeleton
-│       ├── style.css                       # Dedicated dark modern theme styling
-│       ├── pipeline_visualizer.js          # Modular client-side visualization engine
-│       ├── trace_data.js                   # Compiled execution trace dataset
-│       ├── build_visualizer.py             # Trace dataset compiler & asset builder
-│       ├── run_visualizer.sh               # One-click simulation and dashboard builder
-│       ├── run_arch_visualizer.sh          # Arch-test compiler & visualizer runner
-│       ├── trace_engine.py                 # Disassembler & ASCII Gantt chart generator
-│       ├── pipeline_trace.json             # Pipelined execution trace
-│       ├── trace_stallbranch.json          # Always-stall pipeline execution trace
-│       └── trace_singlecycle.json          # Single-cycle execution trace
-│
 ├── verification/
 │   └── arch-test/                          # Official RISC-V Architectural Test Suite Harness
 │       ├── run_singlecycle_suite.sh        # Single-cycle compliance runner (38/38 PASS)
@@ -596,236 +502,154 @@ riscv-ai-accelerator/
 │
 ├── docs/                                   # Architectural Documentation
 │   ├── PIPELINE.md                         # Detailed 5-stage speculative pipeline architecture
-│   ├── BRANCH_STALL.md                     # Always-stall microarchitecture & timing analysis
-│   └── VISUALIZER.md                       # Telemetry extraction & visualizer manual
+│   └── BRANCH_STALL.md                     # Always-stall microarchitecture & timing analysis
 │
 └── PROJECT_SUMMARY.md                      # This master reference document
 ```
 
 ---
 
-## 7. Complete Runbook: How to Run, Simulate & Open Everything
+## 7. Reproduction Commands & Verification Runbook
 
-This section provides complete, copy-paste-ready commands to run every testbench, execute all architectural suites, and open the visualizer dashboard.
+### 7.1 How to Test the CPU
 
----
+The CPU cores are verified using official industry-standard compliance suites (`riscv-arch-test`) and targeted unit testbenches.
 
-### 7.1 How to Open the Interactive Visualizer
-
-You can open the visualizer either directly as a file (zero dependencies, works out of the box) or via a local web server:
-
-#### Option A: Direct File Open (Easiest, No Server Needed)
-Simply open the generated HTML file directly in your browser or from the command line:
-- **Direct File Path**:
-  ```text
-  file:///home/enovo/riscv-ai-accelerator/tools/visualizer/index.html
-  ```
-- **From Terminal (Linux Desktop)**:
-  ```bash
-  xdg-open tools/visualizer/index.html
-  # or
-  google-chrome tools/visualizer/index.html
-  # or
-  firefox tools/visualizer/index.html
-  ```
-
-#### Option B: Local Web Server
-If you prefer viewing over HTTP:
-```bash
-# Start the local server
-./tools/visualizer/run_visualizer.sh --serve 8080
-# Or using Python directly:
-python3 -m http.server 8080 --directory tools/visualizer
-```
-Then navigate to:
-```text
-http://localhost:8080/index.html
-```
-
-#### How to Switch Between Cores in the Visualizer
-At the top-right header of the web page, click the navigation tabs:
-1. **Single-Cycle Core Tab**: Displays the 12-instruction all-types breakdown with 5-stage conceptual anatomy (inputs used, outputs produced, memory handling, register updates).
-2. **5-Stage Pipelined (Always-Stall) Tab**: Displays the verified pipeline execution with live register matrix, glowing forwarding indicators, latched pipeline registers, stage inputs/outputs, instruction bitfield decoder, and the interactive Gantt chart.
-
-#### Web Dashboard Keyboard Shortcuts
-- `Space`: Play / Pause timeline playback
-- `→` (Right Arrow): Step forward 1 cycle
-- `←` (Left Arrow): Step backward 1 cycle
-- `S`: Quick-jump to next hazard stall
-- `B`: Quick-jump to next branch/jump event
-- `F`: Quick-jump to next data forwarding event
-
----
-
-### 7.2 How to Re-generate Visualizer Traces
-
-To simulate and regenerate the visualizer dashboard with custom cycle counts or programs:
+#### A. Official Architectural Compliance Suites (38/38 PASS)
+Run the complete 38-test architectural compliance suites verified bit-for-bit against the Spike golden reference model:
 
 ```bash
-# 1. Regenerate Always-Stall Pipeline (Default demo, 18 cycles)
-./tools/visualizer/run_visualizer.sh --core stallbranch --cycles 18
-
-# 2. Regenerate Single-Cycle Core (12 instructions)
-./tools/visualizer/run_visualizer.sh --core singlecycle --cycles 12
-
-# 3. Regenerate Speculative Pipeline (30 cycles)
-./tools/visualizer/run_visualizer.sh --core speculative --cycles 30
-```
-
----
-
-### 7.3 How to Visualize Official Architectural Compliance Tests
-
-To compile any official RISC-V architectural compliance test (`.S`), simulate it on the always-stall core, and visualize its execution cycle-by-cycle:
-
-```bash
-# 1. Compile & visualize beq-01 (60 cycles)
-./tools/visualizer/run_arch_visualizer.sh beq-01 60
-
-# 2. Compile & visualize add-01 (40 cycles)
-./tools/visualizer/run_arch_visualizer.sh add-01 40
-
-# 3. Compile & visualize bne-01 (70 cycles) and launch HTTP server on port 8080
-./tools/visualizer/run_arch_visualizer.sh bne-01 70 --serve 8080
-```
-
----
-
-### 7.4 How to Run Official Architectural Compliance Suites (`riscv-arch-test`)
-
-Run the complete 38-test architectural compliance suites verified against the Spike golden model:
-
-```bash
-# Core 1: Single-Cycle Processor (38/38 PASS)
-./verification/arch-test/run_singlecycle_suite.sh
+# Core 1: 5-Stage Always-Stall Pipeline Core (38/38 PASS)
+./verification/arch-test/run_stallbranch_suite.sh
 
 # Core 2: 5-Stage Speculative Pipeline Core (38/38 PASS)
 ./verification/arch-test/run_pipeline_suite.sh
 
-# Core 3: 5-Stage Always-Stall Pipeline Core (38/38 PASS)
-./verification/arch-test/run_stallbranch_suite.sh
+# Core 3: Single-Cycle Processor (38/38 PASS)
+./verification/arch-test/run_singlecycle_suite.sh
 ```
 
----
+#### B. Pipelined Core Unit & Hazard Regressions
+Execute the self-checking unit testbenches to verify forwarding and hazard resolution:
 
-### 7.5 How to Run Unit Test Regressions
-
-#### 1. Always-Stall Pipelined Core (`rtl/rv32i_pipelined_stallbranch/`)
 ```bash
-# Hazard Stress Regression (11/11 PASS)
-mkdir -p /tmp/haz_sb && cp tb/rv32i_pipelined/instr_mem_hazards.hex /tmp/haz_sb/instr_mem.hex
+# 1. Hazard Stress Regression on Always-Stall Core (11/11 PASS)
+mkdir -p build && cp tb/rv32i_pipelined/instr_mem_hazards.hex build/instr_mem.hex
 verilator --binary --timing tb/rv32i_pipelined_stallbranch/tb_pipeline_stallbranch_hazards.sv \
   rtl/rv32i_pipelined_stallbranch/*.sv rtl/rv32i_pipelined/alu.sv rtl/rv32i_pipelined/control.sv \
   rtl/rv32i_pipelined/imm_gen.sv rtl/rv32i_pipelined/instruction_memory.sv \
   rtl/rv32i_pipelined/data_memory.sv rtl/rv32i_pipelined/register_file_pipeline.sv \
   rtl/rv32i_pipelined/pipeline_regs.sv rtl/rv32i_pipelined/pc_pipeline.sv \
-  --top-module tb_pipeline_stallbranch_hazards -Mdir /tmp/haz_sb/obj_dir
-(cd /tmp/haz_sb && ./obj_dir/Vtb_pipeline_stallbranch_hazards)
+  --top-module tb_pipeline_stallbranch_hazards -Mdir build/obj_haz_sb
+(cd build && ./obj_haz_sb/Vtb_pipeline_stallbranch_hazards)
 
-# Branch & JALR Stress Regression (19/19 PASS)
-mkdir -p /tmp/bj_sb && cp tb/rv32i/instr_mem_branch_jalr.hex /tmp/bj_sb/instr_mem.hex
+# 2. Branch & JALR Stress Regression (19/19 PASS)
+cp tb/rv32i/instr_mem_branch_jalr.hex build/instr_mem.hex
 verilator --binary --timing tb/rv32i_pipelined_stallbranch/tb_pipeline_stallbranch_branch_jalr.sv \
   rtl/rv32i_pipelined_stallbranch/*.sv rtl/rv32i_pipelined/alu.sv rtl/rv32i_pipelined/control.sv \
   rtl/rv32i_pipelined/imm_gen.sv rtl/rv32i_pipelined/instruction_memory.sv \
   rtl/rv32i_pipelined/data_memory.sv rtl/rv32i_pipelined/register_file_pipeline.sv \
   rtl/rv32i_pipelined/pipeline_regs.sv rtl/rv32i_pipelined/pc_pipeline.sv \
-  --top-module tb_pipeline_stallbranch_branch_jalr -Mdir /tmp/bj_sb/obj_dir
-(cd /tmp/bj_sb && ./obj_dir/Vtb_pipeline_stallbranch_branch_jalr)
+  --top-module tb_pipeline_stallbranch_branch_jalr -Mdir build/obj_bj_sb
+(cd build && ./obj_bj_sb/Vtb_pipeline_stallbranch_branch_jalr)
 
-# Core Basic Regression (7/7 PASS)
-verilator --binary --timing tb/rv32i_pipelined_stallbranch/tb_pipeline_stallbranch_core.sv \
-  rtl/rv32i_pipelined_stallbranch/*.sv rtl/rv32i_pipelined/alu.sv rtl/rv32i_pipelined/control.sv \
-  rtl/rv32i_pipelined/imm_gen.sv rtl/rv32i_pipelined/instruction_memory.sv \
-  rtl/rv32i_pipelined/data_memory.sv rtl/rv32i_pipelined/register_file_pipeline.sv \
-  rtl/rv32i_pipelined/pipeline_regs.sv rtl/rv32i_pipelined/pc_pipeline.sv \
-  --top-module tb_pipeline_stallbranch_core -Mdir /tmp/core_sb/obj_dir
-/tmp/core_sb/obj_dir/Vtb_pipeline_stallbranch_core
-```
-
-#### 2. Speculative Pipelined Core (`rtl/rv32i_pipelined/`)
-```bash
-# Hazard Stress Regression (11/11 PASS)
-mkdir -p /tmp/haz_pipe && cp tb/rv32i_pipelined/instr_mem_hazards.hex /tmp/haz_pipe/instr_mem.hex
-verilator --binary --timing tb/rv32i_pipelined/tb_pipeline_hazards.sv rtl/rv32i_pipelined/*.sv \
-  --top-module tb_pipeline_hazards -Mdir /tmp/haz_pipe/obj_dir
-(cd /tmp/haz_pipe && ./obj_dir/Vtb_pipeline_hazards)
-
-# Branch & JALR Regression (19/19 PASS)
-mkdir -p /tmp/bj_pipe && cp tb/rv32i/instr_mem_branch_jalr.hex /tmp/bj_pipe/instr_mem.hex
-verilator --binary --timing tb/rv32i_pipelined/tb_pipeline_branch_jalr.sv rtl/rv32i_pipelined/*.sv \
-  --top-module tb_pipeline_branch_jalr -Mdir /tmp/bj_pipe/obj_dir
-(cd /tmp/bj_pipe && ./obj_dir/Vtb_pipeline_branch_jalr)
-
-# Core Regression (7/7 PASS)
-verilator --binary --timing tb/rv32i_pipelined/tb_pipeline_core.sv rtl/rv32i_pipelined/*.sv \
-  --top-module tb_pipeline_core -Mdir /tmp/obj_pipe_core && /tmp/obj_pipe_core/Vtb_pipeline_core
-```
-
-#### 3. Single-Cycle Core (`rtl/rv32i/`)
-```bash
-# Branch & JALR Tests
-mkdir -p /tmp/sc_bj && cp tb/rv32i/instr_mem_branch_jalr.hex /tmp/sc_bj/instr_mem.hex
-verilator --binary --timing tb/rv32i/tb_branch_jalr.sv rtl/rv32i/*.sv \
-  --top-module tb_branch_jalr -Mdir /tmp/sc_bj/obj_dir
-(cd /tmp/sc_bj && ./obj_dir/Vtb_branch_jalr)
-
-# SLTU & Byte Memory Alignment
-verilator --binary --timing tb/rv32i/tb_sltu_bytemem.sv rtl/rv32i/*.sv \
-  --top-module tb_sltu_bytemem -Mdir /tmp/sc_sltu/obj_dir
-/tmp/sc_sltu/obj_dir/Vtb_sltu_bytemem
-
-# Register File Tests
-verilator --binary --timing tb/rv32i/tb_register_file.sv rtl/rv32i/*.sv \
-  --top-module tb_register_file -Mdir /tmp/sc_rf/obj_dir
-/tmp/sc_rf/obj_dir/Vtb_register_file
-
-# AUIPC Tests
-verilator --binary --timing tb/rv32i/tb_auipc.sv rtl/rv32i/*.sv \
-  --top-module tb_auipc -Mdir /tmp/sc_auipc/obj_dir
-/tmp/sc_auipc/obj_dir/Vtb_auipc
-
-# LUI & JAL Tests
-verilator --binary --timing tb/rv32i/tb_lui_jal.sv rtl/rv32i/*.sv \
-  --top-module tb_lui_jal -Mdir /tmp/sc_luijal/obj_dir
-/tmp/sc_luijal/obj_dir/Vtb_lui_jal
+# 3. Always-Stall Behavior Check (zero wrong-path execution)
+cp tb/rv32i_pipelined_stallbranch/instr_mem_stallbranch_demo.hex build/instr_mem.hex
+verilator --binary --timing tb/rv32i_pipelined_stallbranch/tb_stall_behavior_check.sv rtl/rv32i_pipelined_stallbranch/*.sv \
+  --top-module tb_stall_behavior_check -Mdir build/obj_stall_check
+(cd build && ./obj_stall_check/Vtb_stall_behavior_check)
 ```
 
 ---
 
-## 8. Future Roadmap & Replicated NPU Accelerator Extension
+### 7.2 How to Test the NPU
 
-With all three scalar cores fully verified against the official RISC-V architectural compliance suite, the project is moving towards specialized hardware acceleration:
+The NPU accelerator is located in `converting_into_NPU/` and verified across unit tests, CPU co-simulation, and an end-to-end $32 \times 32$ matrix multiplication benchmark.
 
-### 8.1 Replicated NPU Hardware Accelerator (`RISCV_CPU`)
+#### A. Run All NPU Tests in One Command
+```bash
+cd converting_into_NPU
+chmod +x run_tests.sh
+./run_tests.sh
+```
 
-As part of the cross-repository architectural exploration, the latest additions from [`https://github.com/vroopaaa/RISCV_CPU`](https://github.com/vroopaaa/RISCV_CPU) (commit [`44b0644`](https://github.com/vroopaaa/RISCV_CPU/commit/44b0644)) have been replicated and verified in `/home/enovo/RISCV_CPU`:
+**Output Summary**:
+```
+================================================================================
+          ALL 7/7 CORE & NPU TESTS PASSED FOR converting_into_NPU               
+================================================================================
+  [1/7] Core Basic Functional Regression           --> PASS (0 errors)
+  [2/7] Hazard Stress Regression (11 checks)       --> PASS (11/11 passed)
+  [3/7] Branch & JALR Regression                   --> PASS (0 errors)
+  [4/7] Pipeline Stall Behavior Check              --> PASS (0 errors)
+  [5/7] Standalone NPU Hardware Unit Verification  --> PASS (8/8 corner cases)
+  [6/7] Full-System CPU + NPU Co-Simulation        --> PASS (0 errors)
+  [7/7] End-to-End 32x32 Tiled GEMM Benchmark      --> PASS (1024/1024 bit-exact)
+================================================================================
+```
 
-- **16x16 NPU Systolic Array Architecture**: Implements a dedicated Neural Processing Unit coprocessor capable of tile-based matrix multiply-accumulate (MAC) execution.
-- **Custom-0 Extension Instruction (`0x0B`)**: Extends the RISC-V ISA with a dedicated opcode for initiating multi-word strided tile loads/stores and matrix compute directly from software.
-- **Strided Memory Subsystem**: Enhanced memory model supporting row/column stride access for 2D matrix tiles.
-- **Matrix Multiplication Verification**:
-  - `npu_matmul_test.c`: 16x16 matrix multiplication ($256$ elements) verified **PASS** with zero numerical errors.
-  - `npu_matmul_256by256.c`: 32x32 tiled matrix multiplication ($1024$ elements across four 16x16 tiles) verified **PASS**.
-  - Software harness in `tests/npu/run_npu_tests.py` automated using `riscv32-unknown-elf-gcc`.
+#### B. Standalone NPU Unit Tests (`tb_npu_top.sv`)
+Verifies the NPU compute datapath across 8 mathematical and control corner cases:
+```bash
+cd converting_into_NPU
+verilator --binary --timing tb/tb_npu_top.sv rtl/npu_top.sv \
+  --top-module tb_npu_top -Mdir build/obj_npu
+./build/obj_npu/Vtb_npu_top
+```
 
-### 8.2 Memory-Mapped NPU Accelerator Integration Roadmap
+#### C. Full-System CPU + NPU Co-Simulation (`tb_pipeline_npu_core.sv`)
+Verifies CPU memory-stage bus decoding at `0x8000_0000`, true non-blocking concurrent execution, and polling loop synchronization:
+```bash
+cd converting_into_NPU
+python3 tests/gen_npu_test_hex.py
+mkdir -p build/obj_system && cp tb/instr_mem_npu.hex build/obj_system/instr_mem.hex
+verilator --binary --timing tb/tb_pipeline_npu_core.sv rtl/*.sv \
+  --top-module tb_pipeline_npu_core -Mdir build/obj_system
+(cd build/obj_system && ./Vtb_pipeline_npu_core)
+```
 
-The dedicated conversion workspace [`converting_into_NPU/`](converting_into_NPU/) (symlinked as `converting into NPU`) contains the complete engineering roadmap in [**`converting_into_NPU/ROADMAP.md`**](converting_into_NPU/ROADMAP.md):
+#### D. End-to-End 32x32 Tiled GEMM Benchmark (`tb_pipeline_npu_benchmark32.sv`)
+Executes an end-to-end $32 \times 32$ signed matrix multiplication benchmark using real test datasets from `matmul_32_t2_s32_O2.c`:
+```bash
+cd converting_into_NPU
+python3 tests/gen_npu_benchmark32.py
+mkdir -p build/obj_benchmark32
+cp tb/instr_mem_benchmark32.hex build/obj_benchmark32/instr_mem.hex
+cp tb/data_a.hex tb/data_b.hex tb/golden_c.hex build/obj_benchmark32/
+verilator --binary --timing tb/tb_pipeline_npu_benchmark32.sv rtl/*.sv \
+  --top-module tb_pipeline_npu_benchmark32 -Mdir build/obj_benchmark32
+(cd build/obj_benchmark32 && ./Vtb_pipeline_npu_benchmark32)
+```
 
-1. **Phase 1: MEM Stage Bus Interconnect**:
-   - Address decoder in `rv32i_pipeline_stallbranch_core.sv` splits addresses at `0x8000_0000`.
-   - Normal addresses (`< 0x8000_0000`) route to main RAM (`data_memory.sv`).
-   - Accelerator addresses (`>= 0x8000_0000`) route to `npu_top.sv`.
-2. **Phase 2: NPU Module & On-Chip SRAMs (`npu_top.sv`)**:
-   - Dimension registers ($M, K, N$ at `0x8000_0000`–`0x08`), `NPU_TRIGGER` (`0x0C`), `NPU_STATUS` (`0x18`).
-   - Three on-chip $256 \times 32$-bit SRAM buffers (`mat_a_sram`, `mat_b_sram`, `mat_c_sram`).
-3. **Phase 3: Hardware Matrix Multiplication Engine**:
-   - Compute FSM (`STATE_IDLE`, `STATE_CALC`, `STATE_DONE`) with 32-bit MAC pipeline.
-   - Upgradable to a parallel $16 \times 16$ 2D systolic array behind the identical MMIO interface.
-4. **Phase 4: C Software Driver (`npu_driver.h`)**:
-   - Clean C API for tile streaming, triggering, and hardware polling (`while (!(*NPU_STATUS & 1));`).
-5. **Phase 5: Hardware-Software Co-Simulation**:
-   - Bit-exact verification against software golden matrix loops and re-verification of the 38/38 architectural suite.
+---
+
+## 8. Neural Processing Unit (NPU) Architecture & Hardware Acceleration
+
+### 8.1 Memory-Mapped Architecture
+The NPU coprocessor is integrated seamlessly into the 5-stage pipeline via Memory-Mapped I/O (MMIO) without requiring custom non-standard instructions. When the CPU performs standard `sw` or `lw` instructions with memory addresses $\ge \text{0x8000\_0000}$, the bus address decoder directs the request to the NPU:
+
+| Address Offset | Register / Memory | Access | Description |
+| :--- | :--- | :---: | :--- |
+| `0x8000_0000` | `NPU_DIM_M` | R/W | Number of rows in Matrix A and Matrix C ($1 \le M \le 16$) |
+| `0x8000_0004` | `NPU_DIM_K` | R/W | Shared inner dimension of Matrix A and Matrix B ($1 \le K \le 16$) |
+| `0x8000_0008` | `NPU_DIM_N` | R/W | Number of columns in Matrix B and Matrix C ($1 \le N \le 16$) |
+| `0x8000_000C` | `NPU_TRIGGER` | W | Writing `1` initiates hardware matrix multiplication |
+| `0x8000_0010` | `NPU_RESET` | W | Writing `1` resets computation FSM, cycle count, and status flags |
+| `0x8000_0014` | `NPU_CYCLES` | R | Cycle counter measuring computation time |
+| `0x8000_0018` | `NPU_STATUS` | R | Bit 0: `done` flag, Bit 1: `busy` flag |
+| `0x8000_1000` - `0x8000_13FC` | `MAT_A_SRAM` | R/W | 256-word dedicated on-chip buffer for tile Matrix A |
+| `0x8000_2000` - `0x8000_23FC` | `MAT_B_SRAM` | R/W | 256-word dedicated on-chip buffer for tile Matrix B |
+| `0x8000_3000` - `0x8000_33FC` | `MAT_C_SRAM` | R/W | 256-word dedicated on-chip buffer for tile Matrix C |
+
+### 8.2 Performance Benchmark Results
+Comparing full $32 \times 32$ tiled matrix multiplication execution ($32,768$ MAC operations):
+
+| Kernel Execution Mode | Execution Cycles | Compute Description |
+| :--- | :---: | :--- |
+| **Pure Scalar Software (RV32I)** | **~1,550,000 cycles** | 3-nested loop C implementation with software-emulated multiplication (~45 cycles/inner loop) |
+| **NPU Accelerator (MMIO Architecture)** | **186,433 cycles** | 8 hardware tile GEMMs @ 1 MAC/cycle + MMIO data streaming and block accumulation |
+| **Full System Speedup** | **~8.3x Faster** | End-to-end wall-clock cycles including all loop overhead and memory transfers |
+| **MAC Datapath Speedup** | **~45x Faster** | 32,768 hardware cycles vs ~1,470,000 software multiplication cycles |
 
 ---
 *Document automatically maintained as part of the RISC-V AI Accelerator Project.*
