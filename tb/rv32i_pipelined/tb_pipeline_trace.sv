@@ -1,12 +1,12 @@
 `timescale 1ns/1ps
 
-module tb_pipeline_stallbranch_trace #(
-    parameter MEM_WORDS = 65536
+module tb_pipeline_trace #(
+    parameter MEM_WORDS = 256
 );
     logic clk = 0;
     logic rst = 1;
 
-    rv32i_pipeline_stallbranch_core #(.MEM_WORDS(MEM_WORDS)) core_dut (
+    rv32i_pipeline_core #(.MEM_WORDS(MEM_WORDS)) core_dut (
         .clk(clk),
         .rst(rst)
     );
@@ -28,7 +28,7 @@ module tb_pipeline_stallbranch_trace #(
 
     always_ff @(posedge clk) begin
         if (rst) begin
-            tb_ex_instr  <= 32'h00000013; // RISC-V NOP
+            tb_ex_instr  <= 32'h00000013; // RISC-V NOP: addi x0, x0, 0
             tb_ex_pc     <= 32'b0;
             tb_mem_instr <= 32'h00000013;
             tb_mem_pc    <= 32'b0;
@@ -63,7 +63,7 @@ module tb_pipeline_stallbranch_trace #(
 
         // IF stage
         $fwrite(fd, "    \"if\": {\"pc\": \"0x%08x\", \"instr\": \"0x%08x\", \"stall\": %s},\n",
-            core_dut.if_pc, core_dut.if_instr, (!core_dut.pc_write || core_dut.ex_branch_or_jump) ? "true" : "false");
+            core_dut.if_pc, core_dut.if_instr, (!core_dut.pc_write) ? "true" : "false");
 
         // ID stage
         $fwrite(fd, "    \"id\": {\"pc\": \"0x%08x\", \"instr\": \"0x%08x\", \"stall\": %s, \"rs1\": %0d, \"rs2\": %0d, \"rd\": %0d, \"imm\": \"0x%08x\", \"rs1_val\": \"0x%08x\", \"rs2_val\": \"0x%08x\", \"uses_rs1\": %s, \"uses_rs2\": %s},\n",
@@ -78,7 +78,7 @@ module tb_pipeline_stallbranch_trace #(
             core_dut.alu_a, core_dut.alu_b, core_dut.ex_alu_result,
             core_dut.forward_a, core_dut.forward_b, core_dut.forwarded_a, core_dut.forwarded_b,
             core_dut.ex_branch ? "true" : "false", core_dut.ex_branch_taken ? "true" : "false",
-            core_dut.ex_resolved_pc, core_dut.ex_branch_or_jump ? "true" : "false", core_dut.flush_id_ex ? "true" : "false");
+            core_dut.ex_target_pc, core_dut.ex_redirect ? "true" : "false", core_dut.flush_id_ex ? "true" : "false");
 
         // MEM stage
         $fwrite(fd, "    \"mem\": {\"pc\": \"0x%08x\", \"instr\": \"0x%08x\", \"rd\": %0d, \"reg_write\": %s, \"alu_result\": \"0x%08x\", \"mem_read\": %s, \"mem_write\": %s, \"write_data\": \"0x%08x\", \"read_data\": \"0x%08x\"},\n",
@@ -91,10 +91,9 @@ module tb_pipeline_stallbranch_trace #(
             tb_wb_pc, tb_wb_instr, core_dut.wb_rd, core_dut.wb_reg_write ? "true" : "false", core_dut.wb_write_data);
 
         // Hazard unit summary
-        $fwrite(fd, "    \"hazards\": {\"load_use_stall\": %s, \"branch_flush\": %s, \"branch_stall\": %s, \"flush_if_id\": %s, \"flush_id_ex\": %s, \"forward_a\": %0d, \"forward_b\": %0d},\n",
+        $fwrite(fd, "    \"hazards\": {\"load_use_stall\": %s, \"branch_flush\": %s, \"flush_if_id\": %s, \"flush_id_ex\": %s, \"forward_a\": %0d, \"forward_b\": %0d},\n",
             ((!core_dut.pc_write) && core_dut.flush_id_ex) ? "true" : "false",
-            "false",
-            (core_dut.id_branch_or_jump || core_dut.ex_branch_or_jump) ? "true" : "false",
+            core_dut.ex_redirect ? "true" : "false",
             core_dut.flush_if_id ? "true" : "false",
             core_dut.flush_id_ex ? "true" : "false",
             core_dut.forward_a, core_dut.forward_b);
@@ -139,7 +138,7 @@ module tb_pipeline_stallbranch_trace #(
             // Early termination check on self-loop jal x0, 0 or ebreak
             if (tb_wb_instr == 32'h0000006f || tb_wb_instr == 32'h00100073) begin
                 drain_cycles++;
-                if (drain_cycles >= 1) break;
+                if (drain_cycles >= 4) break;
             end
         end
 
@@ -149,4 +148,3 @@ module tb_pipeline_stallbranch_trace #(
         $finish;
     end
 endmodule
-

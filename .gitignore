@@ -20,3 +20,15 @@ dump.json
 cycle_dump.json
 instr_mem.hex
 data_mem.hex
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Visualizer & Trace Telemetry (Private / Local only)
+tools/
+visualizer/
+converting_into_NPU/visualizer/
+docs/VISUALIZER.md
+*.json

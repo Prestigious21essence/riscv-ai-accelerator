@@ -1,0 +1,206 @@
+cycle	pc	instruction
+0	0x0	auipc sp,0x400
+1	0x4	addi sp,sp,-4 # 3ffffc <_stack_top>
+2	0x8	jal f8 <main>
+3	0xf8	addi sp,sp,-48
+4	0xfc	sw ra,44(sp)
+5	0x100	sw s0,40(sp)
+6	0x104	addi s0,sp,48
+7	0x108	li a5,32
+8	0x10c	sw a5,-32(s0)
+9	0x110	li a5,32
+10	0x114	sw a5,-36(s0)
+11	0x118	li a5,32
+12	0x11c	sw a5,-40(s0)
+13	0x120	lw a1,-32(s0)
+14	0x124	lui a0,0x80000
+15	0x128	jal 10 <npu_write32>
+16	0x10	addi sp,sp,-32
+17	0x14	sw s0,28(sp)
+18	0x18	addi s0,sp,32
+19	0x1c	sw a0,-20(s0)
+20	0x20	sw a1,-24(s0)
+21	0x24	lw a5,-24(s0)
+22	0x28	lw a4,-20(s0)
+23	0x2c	sw a5,0(a4)
+24	0x30	nop
+25	0x34	lw s0,28(sp)
+26	0x38	addi sp,sp,32
+27	0x3c	ret
+28	0x12c	lw a1,-36(s0)
+29	0x130	lui a5,0x80000
+30	0x134	addi a0,a5,4 # 80000004 <_stack_top+0x7fc00008>
+31	0x138	jal 10 <npu_write32>
+32	0x10	addi sp,sp,-32
+33	0x14	sw s0,28(sp)
+34	0x18	addi s0,sp,32
+35	0x1c	sw a0,-20(s0)
+36	0x20	sw a1,-24(s0)
+37	0x24	lw a5,-24(s0)
+38	0x28	lw a4,-20(s0)
+39	0x2c	sw a5,0(a4)
+40	0x30	nop
+41	0x34	lw s0,28(sp)
+42	0x38	addi sp,sp,32
+43	0x3c	ret
+44	0x13c	lw a1,-40(s0)
+45	0x140	lui a5,0x80000
+46	0x144	addi a0,a5,8 # 80000008 <_stack_top+0x7fc0000c>
+47	0x148	jal 10 <npu_write32>
+48	0x10	addi sp,sp,-32
+49	0x14	sw s0,28(sp)
+50	0x18	addi s0,sp,32
+51	0x1c	sw a0,-20(s0)
+52	0x20	sw a1,-24(s0)
+53	0x24	lw a5,-24(s0)
+54	0x28	lw a4,-20(s0)
+55	0x2c	sw a5,0(a4)
+56	0x30	nop
+57	0x34	lw s0,28(sp)
+58	0x38	addi sp,sp,32
+59	0x3c	ret
+60	0x14c	sw zero,-20(s0)
+61	0x150	j 230 <main+0x138>
+62	0x230	lw a5,-20(s0)
+63	0x234	beqz a5,154 <main+0x5c>
+64	0x154	sw zero,-24(s0)
+65	0x158	j 21c <main+0x124>
+66	0x21c	lw a5,-24(s0)
+67	0x220	beqz a5,15c <main+0x64>
+68	0x15c	li a1,1
+69	0x160	lui a5,0x80000
+70	0x164	addi a0,a5,20 # 80000014 <_stack_top+0x7fc00018>
+71	0x168	jal 10 <npu_write32>
+72	0x10	addi sp,sp,-32
+73	0x14	sw s0,28(sp)
+74	0x18	addi s0,sp,32
+75	0x1c	sw a0,-20(s0)
+76	0x20	sw a1,-24(s0)
+77	0x24	lw a5,-24(s0)
+78	0x28	lw a4,-20(s0)
+79	0x2c	sw a5,0(a4)
+80	0x30	nop
+81	0x34	lw s0,28(sp)
+82	0x38	addi sp,sp,32
+83	0x3c	ret
+84	0x16c	sw zero,-28(s0)
+85	0x170	j 1dc <main+0xe4>
+86	0x1dc	lw a5,-28(s0)
+87	0x1e0	beqz a5,174 <main+0x7c>
+88	0x174	lw a4,-20(s0)
+89	0x178	lw a5,-28(s0)
+90	0x17c	add a5,a4,a5
+91	0x180	slli a5,a5,0xa
+92	0x184	slli a4,a5,0x2
+93	0x188	li a5,604
+94	0x18c	add a5,a4,a5
+95	0x190	mv a0,a5
+96	0x194	jal 40 <npu_load_a>
+97	0x40	addi sp,sp,-32
+98	0x44	sw s0,28(sp)
+99	0x48	addi s0,sp,32
+100	0x4c	sw a0,-20(s0)
+101	0x50	lw a5,-20(s0)
+102	0x54	li a4,0
+103	0x58	.insn 4, 0x00e7800b   <-- NPU LOAD A (contiguous 256-word)
+104	0x5c	nop
+105	0x60	lw s0,28(sp)
+106	0x64	addi sp,sp,32
+107	0x68	ret
+108	0x198	lw a4,-28(s0)
+109	0x19c	lw a5,-24(s0)
+110	0x1a0	add a5,a4,a5
+111	0x1a4	slli a5,a5,0xa
+112	0x1a8	slli a4,a5,0x2
+113	0x1ac	lui a5,0x1
+114	0x1b0	addi a5,a5,604 # 125c <B>
+115	0x1b4	add a5,a4,a5
+116	0x1b8	mv a0,a5
+117	0x1bc	jal 6c <npu_load_b>
+118	0x6c	addi sp,sp,-32
+119	0x70	sw s0,28(sp)
+120	0x74	addi s0,sp,32
+121	0x78	sw a0,-20(s0)
+122	0x7c	lw a5,-20(s0)
+123	0x80	li a4,0
+124	0x84	.insn 4, 0x00e7900b   <-- NPU LOAD B (contiguous 256-word)
+125	0x88	nop
+126	0x8c	lw s0,28(sp)
+127	0x90	addi sp,sp,32
+128	0x94	ret
+129	0x1c0	li a1,1
+130	0x1c4	lui a5,0x80000
+131	0x1c8	addi a0,a5,16 # 80000010 <_stack_top+0x7fc00014>
+132	0x1cc	jal 10 <npu_write32>
+133	0x10	addi sp,sp,-32
+134	0x14	sw s0,28(sp)
+135	0x18	addi s0,sp,32
+136	0x1c	sw a0,-20(s0)
+137	0x20	sw a1,-24(s0)
+138	0x24	lw a5,-24(s0)
+139	0x28	lw a4,-20(s0)
+140	0x2c	sw a5,0(a4)
+141	0x30	nop
+142	0x34	lw s0,28(sp)
+143	0x38	addi sp,sp,32
+144	0x3c	ret
+145	0x1d0	lw a5,-28(s0)
+146	0x1d4	addi a5,a5,1
+147	0x1d8	sw a5,-28(s0)
+148	0x1dc	lw a5,-28(s0)
+149	0x1e0	beqz a5,174 <main+0x7c>
+150	0x1e4	lw a5,-20(s0)
+151	0x1e8	slli a4,a5,0x5
+152	0x1ec	lw a5,-24(s0)
+153	0x1f0	add a4,a4,a5
+154	0x1f4	lui a5,0x2
+155	0x1f8	addi a5,a5,-1792 # 1900 <B+0x6a4>
+156	0x1fc	add a5,a4,a5
+157	0x200	slli a5,a5,0x7
+158	0x204	li a1,128
+159	0x208	mv a0,a5
+160	0x20c	jal 98 <npu_store_c>
+161	0x98	addi sp,sp,-32
+162	0x9c	sw s0,28(sp)
+163	0xa0	addi s0,sp,32
+164	0xa4	sw a0,-20(s0)
+165	0xa8	sw a1,-24(s0)
+166	0xac	lw a5,-20(s0)
+167	0xb0	lw a4,-24(s0)
+168	0xb4	.insn 4, 0x00e7a00b   <-- NPU STORE C (contiguous 256-word)
+169	0xb8	nop
+170	0xbc	lw s0,28(sp)
+171	0xc0	addi sp,sp,32
+172	0xc4	ret
+173	0x210	lw a5,-24(s0)
+174	0x214	addi a5,a5,1
+175	0x218	sw a5,-24(s0)
+176	0x21c	lw a5,-24(s0)
+177	0x220	beqz a5,15c <main+0x64>
+178	0x224	lw a5,-20(s0)
+179	0x228	addi a5,a5,1
+180	0x22c	sw a5,-20(s0)
+181	0x230	lw a5,-20(s0)
+182	0x234	beqz a5,154 <main+0x5c>
+183	0x238	li a1,32
+184	0x23c	lui a0,0xc8
+185	0x240	jal c8 <npu_print>
+186	0xc8	addi sp,sp,-32
+187	0xcc	sw s0,28(sp)
+188	0xd0	addi s0,sp,32
+189	0xd4	sw a0,-20(s0)
+190	0xd8	sw a1,-24(s0)
+191	0xdc	lw a5,-20(s0)
+192	0xe0	lw a4,-24(s0)
+193	0xe4	.insn 4, 0x00e7b00b   <-- NPU PRINT (debug)
+194	0xe8	nop
+195	0xec	lw s0,28(sp)
+196	0xf0	addi sp,sp,32
+197	0xf4	ret
+198	0x244	li a5,0
+199	0x248	mv a0,a5
+200	0x24c	lw ra,44(sp)
+201	0x250	lw s0,40(sp)
+202	0x254	addi sp,sp,48
+203	0x258	ret
+204	0xc	j c <_end>
