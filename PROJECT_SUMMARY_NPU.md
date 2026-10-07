@@ -2,7 +2,7 @@
 
 **Project Lead / Architect**: Advised under Prof. Ashwin  
 **Repository**: `riscv-ai-accelerator`  
-**Workspace**: `converting_into_NPU/` (and `rtl/converting_into_NPU/`)  
+**Workspace**: `converting_into_NPU/`  
 **Status**: NPU Coprocessor Implemented | MEM-Stage Interconnect Integrated | Standalone & System Co-Simulation Verified | 100% RV32I Compliance Preserved  
 **Target Workload**: Deep Learning Edge Inference, General Matrix Multiply (GEMM), Convolution & Tensor Kernels  
 

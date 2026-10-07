@@ -32,3 +32,8 @@ visualizer/
 converting_into_NPU/visualizer/
 docs/VISUALIZER.md
 *.json
+
+# Local space-delimited symlinks
+converting into NPU
+rtl/converting into NPU
+tb/converting into NPU

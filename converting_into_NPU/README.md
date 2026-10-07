@@ -1,6 +1,6 @@
 # RISC-V 5-Stage Pipeline -> NPU Accelerator Conversion Workspace
 
-This folder (`converting_into_NPU`, symlinked as `converting into NPU`) contains a complete copy of the 5-stage non-speculative always-stall RV32I pipeline core (`rtl/rv32i_pipelined_stallbranch/`) and its verification testbenches (`tb/rv32i_pipelined_stallbranch/`).
+This folder (`converting_into_NPU`) contains a complete copy of the 5-stage non-speculative always-stall RV32I pipeline core (`rtl/rv32i_pipelined_stallbranch/`) and its verification testbenches (`tb/rv32i_pipelined_stallbranch/`).
 
 This workspace serves as the development environment for integrating hardware Neural Processing Unit (NPU) accelerator features into the RV32I pipeline.
 
