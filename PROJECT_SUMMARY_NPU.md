@@ -330,6 +330,7 @@ While the baseline compute FSM executes $M \times N \times K$ multiply-accumulat
 - **Output Stationary / Weight Stationary Dataflow**: $16 \times 16 = 256$ processing elements (PEs) executing concurrently.
 - **Latency Scaling**: Computation latency drops from $\mathcal{O}(M \times N \times K)$ ($4,096$ cycles for $16 \times 16$) to $\mathcal{O}(M + N + K)$ ($\sim 48$ cycles).
 - **Software Transparency**: Because all tile streaming and triggering occurs through the memory-mapped control registers and SRAM windows, the software driver (`npu_driver.h`) requires **zero modifications** when transitioning to a systolic backend.
+- **Superscalar Concurrent Integration**: As detailed in [`Superscalar/PLAN.md`](../Superscalar/PLAN.md), the NPU coprocessor evolves to feature **multi-bank concurrent streaming** (parallel `load_a` + `load_b` co-issue), **ping-pong double-buffering** (overlap tile transfers with compute to achieve near 100% MAC array utilization), and a **decoupled 4-entry command FIFO**.
 
 ---
 

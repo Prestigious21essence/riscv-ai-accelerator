@@ -2,7 +2,7 @@
 
 **Project Lead / Architect**: Advised under Prof. Ashwin  
 **Repository**: `riscv-ai-accelerator`  
-**Status**: Single-Cycle Core Verified | 5-Stage Speculative Pipeline Verified | 5-Stage Always-Stall Pipeline Verified | MMIO NPU Coprocessor Verified  
+**Status**: Single-Cycle Core Verified | 5-Stage Speculative Pipeline Verified | 5-Stage Always-Stall Pipeline Verified | MMIO NPU Coprocessor Verified | 2-Way Superscalar Core & Concurrent NPU Verified (Phases 1-6 Complete, 221/221 Checks + 1,024 GEMM Words PASS)  
 **Compliance**: **38/38 PASS (100%)** on official RISC-V Architectural Compliance Test Suite (`riscv-arch-test`) vs. Spike golden reference across all cores.
 
 ---
@@ -33,6 +33,12 @@
    - [7.1 How to Test the CPU](#71-how-to-test-the-cpu)
    - [7.2 How to Test the NPU](#72-how-to-test-the-npu)
 8. [Neural Processing Unit (NPU) Architecture & Hardware Acceleration](#8-neural-processing-unit-npu-architecture--hardware-acceleration)
+9. [Superscalar Microarchitecture & Accelerated NPU Conversion](#9-superscalar-microarchitecture--accelerated-npu-conversion)
+   - [9.1 Architectural Motivation & Theoretical Throughput Gains](#91-architectural-motivation--theoretical-throughput-gains)
+   - [9.2 Key Insights & Empirical Findings from RISCV_CPU](#92-key-insights--empirical-findings-from-riscv_cpu)
+   - [9.3 2-Way Dual-Issue Superscalar Microarchitecture (RTL Specification)](#93-2-way-dual-issue-superscalar-microarchitecture-rtl-specification)
+   - [9.4 Superscalar Concurrent NPU Architecture (Double-Buffering & Multi-Bank DMA)](#94-superscalar-concurrent-npu-architecture-double-buffering--multi-bank-dma)
+   - [9.5 6-Phase Implementation Roadmap & File Layout](#95-6-phase-implementation-roadmap--file-layout)
 
 ---
 
@@ -54,8 +60,15 @@ Phase 2: Neural Processing Unit (NPU) Coprocessor (COMPLETE)
   ├── 3. High-throughput 32-bit Multiply-Accumulate (MAC) datapath (1 MAC/cycle)
   └── 4. Bit-exact 32x32 tiled GEMM hardware-software co-simulation
 
-Phase 3: Advanced Execution Topologies (FUTURE)
-  └── Multi-issue superscalar and VLIW-like execution clusters inspired by Vortex GPGPU
+Phase 3: Advanced Execution Topologies — Superscalar Architecture (PHASES 1-6 COMPLETE, 221/221 CHECKS + 1024 GEMM WORDS PASS)
+  ├── 1. In-order 2-way dual-issue RV32I core (Superscalar/PLAN.md)
+  ├── 2. 64-bit dual-word fetch unit with 128-entry BTB & unaligned steering (Phase 1 COMPLETE, 77/77 PASS)
+  ├── 3. 4R/2W register file with internal write-to-read bypassing (Phase 1 COMPLETE)
+  ├── 4. Dynamic hazard & issue logic with intra-packet RAW, WAW age priority, and load-use detection (Phase 2 COMPLETE, 29/29 PASS)
+  ├── 5. Dual execution ALUs with full 4x6 crossbar forwarding matrix (Phase 3 COMPLETE, 28/28 PASS)
+  ├── 6. Dual-port data memory with MemClass structural hazard arbiter (Phase 4 COMPLETE, 13/13 PASS)
+  ├── 7. Concurrent double-buffered NPU accelerator with dual-channel tile DMA (Phase 5 COMPLETE, 20/20 PASS)
+  └── 8. Full system verification: RV32I Arch (38/38), Hazard Stress Suite (6/6), 32x32 GEMM Benchmark (Phase 6 COMPLETE, 2.11x Speedup)
 ```
 
 All implementations are strictly verified against the **official RISC-V Architectural Test Suite (`riscv-arch-test`)** using the Berkeley **Spike ISS (Instruction Set Simulator)** as the bit-for-bit golden reference.
@@ -475,6 +488,13 @@ riscv-ai-accelerator/
 │   ├── run_tests.sh                        # Automated 7/7 comprehensive regression test runner
 │   └── TEST_RESULTS.md                     # Comprehensive cycle-accurate verification logs
 │
+├── Superscalar/                            # In-Order Dual-Issue Superscalar Core & NPU Acceleration Workspace
+│   ├── PLAN.md                             # Comprehensive master architectural plan & microarchitecture specification
+│   ├── README.md                           # Quick-start guide and workspace directory overview
+│   ├── rtl/                                # Synthesizable SystemVerilog modules (Dual-issue CPU, 4R/2W RF, 2P RAM, NPU)
+│   ├── tb/                                 # Dedicated unit and co-simulation testbenches
+│   └── verification/                       # Official compliance test runner scripts
+│
 ├── tb/
 │   ├── rv32i/                              # Single-cycle unit testbenches
 │   │   ├── instr_mem_all_types.hex         # 12-instruction comprehensive verification program
@@ -650,6 +670,140 @@ Comparing full $32 \times 32$ tiled matrix multiplication execution ($32,768$ MA
 | **NPU Accelerator (MMIO Architecture)** | **186,433 cycles** | 8 hardware tile GEMMs @ 1 MAC/cycle + MMIO data streaming and block accumulation |
 | **Full System Speedup** | **~8.3x Faster** | End-to-end wall-clock cycles including all loop overhead and memory transfers |
 | **MAC Datapath Speedup** | **~45x Faster** | 32,768 hardware cycles vs ~1,470,000 software multiplication cycles |
+
+---
+
+## 9. Superscalar Microarchitecture & Accelerated NPU Conversion
+
+The next evolution of the project transitions the core from a single-issue scalar pipeline into a **2-Way Dual-Issue In-Order Superscalar Core with a Concurrent Double-Buffered NPU Accelerator**. Full architectural specifications and implementation details are maintained in [`Superscalar/PLAN.md`](Superscalar/PLAN.md).
+
+### 9.1 Architectural Motivation & Theoretical Throughput Gains
+In the baseline 5-stage scalar core, tiled matrix multiplication spends $>80\%$ of execution cycles executing address calculations, tile streaming loops, and induction variable increments. Because each instruction executes sequentially, processor throughput is capped at $\text{IPC} \le 1.0$.
+
+Transitioning to a **2-Way In-Order Superscalar Core**:
+- Enables dual instruction fetch, decode, dispatch, execution, and writeback every cycle ($\text{Peak IPC} = 2.0$).
+- Allows address pointer arithmetic (`addi`, `add`) to co-issue concurrently with NPU control/trigger stores.
+- Reduces loop induction overhead by **50%**.
+
+### 9.2 Key Insights & Empirical Findings from `RISCV_CPU`
+Analysis of the software superscalar emulator in `/home/enovo/RISCV_CPU` (`docs/superscalar.md`, `docs/superscalar-progress.md`) provides critical hardware design rules:
+
+1. **The 6-Phase Model**: Evaluates `fetch_n()`, `decode_all()`, `hazard_scan()`, `execute_m()`, `read_m()`, and `writeback_m()` dynamically selecting safe issue prefix $m \le n$.
+2. **Hazard Co-Issue Rules**:
+   - **Intra-packet RAW**: Dependent instructions in the same window stall unless cross-pipe forwarding is provided.
+   - **WAW Age Priority**: Handled in writeback by ensuring Slot 1 (later in program order) overwrites Slot 0 if writing to the same destination register $rd$.
+   - **WAR Elimination**: Reads occur in ID/EX before any write lands at the clock edge in WB.
+   - **Branch Speculation**: 128-entry BTB with 2-bit saturating counters; mispredicts squash downstream speculative slots in the issue packet.
+   - **Memory Classes (`MemClass`)**: Stores conflict with stores; same-bank loads conflict with same-bank loads. **Stores do NOT conflict with NPU bank loads**, and **Bank A loads do NOT conflict with Bank B loads** (different physical ports).
+3. **Issue Width Scaling ($n=2$ vs $n=4$)**:
+   - Going from $n=1$ to $n=2$ achieves **~1.96x–1.98x speedup** on matrix multiplication, capturing $>90\%$ of available gains.
+   - Widening past $n=4$ yields near-zero marginal gain due to RAW dependencies in address computation.
+   - A **2-way dual-issue core** provides the optimal balance of IPC gain vs. silicon area and timing closure.
+
+### 9.3 2-Way Dual-Issue Superscalar Microarchitecture (RTL Specification)
+
+```text
+               +-----------------------------------------------------------+
+               |                  IF Stage (64-bit Fetch)                  |
+               |  PC Gen: pc + 4 (1-issue) | pc + 8 (2-issue) | Target PC  |
+               |  Instruction Memory: Dual-Word Fetch (64-bit Bus)         |
+               +-----------------------------+-----------------------------+
+                                             |
+                          [ IF/ID Dual Pipeline Register ]
+                                             |
+        +------------------------------------+------------------------------------+
+        |                                                                         |
+        v                                                                         v
++-----------------------+                                                 +-----------------------+
+|  ID Stage (Slot 0)    |                                                 |  ID Stage (Slot 1)    |
+| - Decoder 0           | <=============================================> | - Decoder 1           |
+| - Imm Gen 0           |      Superscalar Hazard & Issue Logic           | - Imm Gen 1           |
+| - Reg Read (rs1, rs2) |      (RAW Check, Structural Check, Port Rules)  | - Reg Read (rs1, rs2) |
++-----------+-----------+                                                 +-----------+-----------+
+            |                                                                         |
+            |       +-------------------------------------------------+               |
+            |       |     Register File (4 Read Ports / 2 Write Ports)|               |
+            |       +-------------------------------------------------+               |
+            |                                                                         |
+            +------------------------------------+------------------------------------+
+                                                 |
+                                  [ ID/EX Dual Pipeline Register ]
+                                                 |
+        +----------------------------------------+----------------------------------------+
+        |                                                                                 |
+        v                                                                                 v
++-------------------------------+                                                 +-------------------------------+
+|     EX Stage (Pipe 0)         |                                                 |     EX Stage (Pipe 1)         |
+| - ALU 0 (RV32I Arithmetic)    | <=============================================> | - ALU 1 (RV32I Arithmetic)    |
+| - Branch / Jump Resolution    |             Full Crossbar Forwarding            | - Intra-cycle ALU0->ALU1      |
+| - Redirect & Target Gen       |           (EX0/1, MEM0/1, WB0/1 Bypass)         |   Operand Bypassing           |
++---------------+---------------+                                                 +---------------+---------------+
+                |                                                                                 |
+                |               [ EX/MEM Dual Pipeline Register ]                                 |
+                +--------------------------------+------------------------------------------------+
+                                                 |
+                                                 v
+                        +-------------------------------------------------+
+                        |           MEM Stage & Class Arbiter             |
+                        | - Port 0 Address Router (RAM vs MMIO NPU)       |
+                        | - Port 1 Address Router (RAM vs MMIO NPU)       |
+                        | - MemClass Port Collision Checker               |
+                        +------------------------+------------------------+
+                                                 |
+                                                 v
+                                    +--------------------------+
+                                    |     data_memory (2P)     |
+                                    |  Port A: Main RAM Access |
+                                    |  Port B: Main RAM Access |
+                                    +--------------------------+
+                                                 |
+                                [ MEM/WB Dual Pipeline Register ]
+                                                 |
+        +----------------------------------------+----------------------------------------+
+        |                                                                                 |
+        v                                                                                 v
++-------------------------------+                                                 +-------------------------------+
+|     WB Stage (Pipe 0)         |                                                 |     WB Stage (Pipe 1)         |
+| - Result Mux (ALU / Mem / PC) |                                                 | - Result Mux (ALU / Mem)      |
+| - Regfile Write Port 0        |                                                 | - Regfile Write Port 1        |
++-------------------------------+                                                 +-------------------------------+
+                                                 |
+                                                 v
+                        +-------------------------------------------------+
+                        |             WAW Priority Resolver               |
+                        | If rd0 == rd1: WB1 overwrites WB0 (Program Order)|
+                        +-------------------------------------------------+
+```
+
+- **IF Stage**: 64-bit fetch bus reading two instructions per cycle; unaligned word steering logic; 128-entry BTB with 2-bit saturating counters.
+- **ID Stage**: Dual decoders; 4-Read / 2-Write Port Register File (`register_file_4r2w.sv`); dynamic issue and hazard unit (`hazard_unit_superscalar.sv`).
+- **EX Stage**: Dual 32-bit ALUs (`alu0`, `alu1`), full $4 \times 6$ crossbar forwarding matrix, and intra-cycle ALU0-to-ALU1 bypass for chained pointer additions.
+- **MEM Stage**: True dual-port data memory controller (`data_memory_dualport.sv`) with memory class structural collision resolver (`mem_class_arbiter.sv`).
+- **WB Stage**: Dual write ports with age-priority arbitration resolving WAW register collisions.
+
+### 9.4 Superscalar Concurrent NPU Architecture (Double-Buffering & Multi-Bank DMA)
+1. **Multi-Bank Concurrent Streaming**: Bank A and Bank B have dedicated ports, allowing `load_a` and `load_b` to stream into the NPU simultaneously in a single cycle.
+2. **Ping-Pong Double-Buffering**: Active and shadow buffers for Matrix A, B, and C allow the CPU to stream tile $K+1$ while the MAC engine computes tile $K$, hiding memory transfer latency completely.
+3. **Non-Blocking Command Queue**: 4-entry FIFO decouples CPU MMIO requests from coprocessor execution, eliminating polling stall penalties.
+
+### 9.5 6-Phase Implementation Roadmap & File Layout
+The development follows a phased progression structured in [`Superscalar/`](Superscalar/):
+- **Phase 1 (COMPLETE, 77/77 PASS)**: Dual-Issue Frontend (`pc_superscalar.sv`, `instruction_memory_64.sv`, `btb_128.sv`, `fetch_unit_superscalar.sv`, `register_file_4r2w.sv`). Visualized in [`btb_visualizer.html`](Superscalar/visualizer/btb_visualizer.html) and [`index.html`](Superscalar/visualizer/index.html).
+- **Phase 2 (COMPLETE, 29/29 PASS)**: Dynamic In-Order Hazard & Issue Unit (`hazard_unit_superscalar.sv`, `control_superscalar.sv`, `imm_gen_superscalar.sv`). Visualized in dedicated [`phase2_id_stage_visualizer.html`](Superscalar/visualizer/phase2_id_stage_visualizer.html).
+- **Phase 3 (COMPLETE, 28/28 PASS)**: Dual ALUs & Full Crossbar Forwarding Matrix (`alu_superscalar.sv`, `branch_evaluator.sv`, `forwarding_unit_superscalar.sv`, `pipeline_regs_superscalar.sv`). Visualized in dedicated [`phase3_ex_stage_visualizer.html`](Superscalar/visualizer/phase3_ex_stage_visualizer.html).
+- **Phase 4 (COMPLETE, 13/13 PASS)**: Dual-Port Data Memory & `MemClass` Structural Arbiter (`data_memory_dualport.sv`, `mem_class_arbiter.sv`). Visualized in dedicated [`phase4_mem_stage_visualizer.html`](Superscalar/visualizer/phase4_mem_stage_visualizer.html).
+- **Phase 5 (COMPLETE, 20/20 PASS)**: Concurrent Double-Buffered NPU Coprocessor & Top-Level Dual-Issue Core (`npu_top_superscalar.sv`, `rv32i_superscalar_npu_core.sv`, `npu_driver_superscalar.h`). Visualized in dedicated [`phase5_npu_double_buffer_visualizer.html`](Superscalar/visualizer/phase5_npu_double_buffer_visualizer.html).
+- **Phase 6 (COMPLETE, 54/54 CHECKS + 1024 GEMM WORDS PASS)**: Full System Verification, RV32I Architectural Compliance (38/38 PASS), Hazard Stress Suite (6/6 scenarios PASS), and End-to-End 32x32 Tiled GEMM Benchmark (1,024/1,024 words verified bit-for-bit, 2.11x wall-clock speedup). Visualized in dedicated [`phase6_npu_visualizer.html`](Superscalar/visualizer/phase6_npu_visualizer.html).
+
+### 9.6 Regression Verification Status
+Master regression [`Superscalar/run_all_tests.sh`](Superscalar/run_all_tests.sh) runs all 6 implemented phases in sequence:
+- **Phase 1**: 77 / 77 assertions PASS
+- **Phase 2**: 29 / 29 assertions PASS
+- **Phase 3**: 28 / 28 assertions PASS
+- **Phase 4**: 13 / 13 assertions PASS
+- **Phase 5**: 20 / 20 assertions PASS
+- **Phase 6**: 54 / 54 checks PASS + 1,024 / 1,024 GEMM words match golden model (0 mismatches)
+- **Total**: **221 / 221 checks + 1,024 GEMM words PASS (0 errors, 100% compliance)**
 
 ---
 *Document automatically maintained as part of the RISC-V AI Accelerator Project.*
