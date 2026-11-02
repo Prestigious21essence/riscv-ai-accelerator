@@ -160,11 +160,58 @@ $$\text{Speedup} = \frac{\text{CPU Software Execution Cycles}}{\text{NPU Acceler
 
 ---
 
-## 5. Detailed Documentation
+## 5. 2-Way Dual-Issue Superscalar Core & Concurrent NPU
 
+Located in [`Superscalar/`](Superscalar/), this advanced microarchitecture transitions the single-issue 5-stage scalar pipeline and MMIO NPU into an **In-Order Dual-Issue Superscalar Processor with a Concurrent Double-Buffered NPU Coprocessor**.
+
+### 5.1 Architecture Highlights
+- **Dual-Issue Frontend & 4R/2W RegFile** (Phase 1): 64-bit dual-word fetch, 128-entry BTB with 2-bit bimodal saturating counters, odd-target unaligned steering, and 4-read / 2-write port register file with write-first internal bypassing.
+- **Dynamic Hazard & Issue Unit** (Phase 2): Intra-packet RAW detection, younger-port WAW priority, load-use bubble insertion, and memory class conflict matrix.
+- **Dual ALUs & Full Crossbar Forwarding** (Phase 3): Dual 32-bit execution ALUs, branch evaluator, and full $4 \times 6$ crossbar forwarding matrix with **intra-cycle ALU0 $\to$ ALU1 bypassing**.
+- **True Dual-Port Memory & Arbiter** (Phase 4): Concurrent dual-port RAM and structural hazard arbiter with intra-stage store-to-load forwarding.
+- **Concurrent Double-Buffered NPU** (Phase 5): Ping-pong double buffering (Matrix A, B, and C dual 1 KB SRAM banks), dual-channel 64-bit DMA streaming, and 4-entry asynchronous command FIFO.
+- **Full Verification & $32 \times 32$ GEMM Benchmark** (Phase 6): 38/38 RV32I architectural compliance (100%), 6-scenario hazard stress suite, and 1,024/1,024 words verified bit-for-bit against golden reference model.
+
+### 5.2 How to Run Superscalar Tests
+To run the complete master regression covering all 6 phases:
+
+```bash
+cd Superscalar
+chmod +x run_all_tests.sh
+./run_all_tests.sh
+```
+
+To run individual phase regressions:
+```bash
+./run_phase1_tests.sh   # Frontend & 4R/2W RegFile (77/77 PASS)
+./run_phase2_tests.sh   # Dual Decode & Hazard Unit (29/29 PASS)
+./run_phase3_tests.sh   # Dual ALUs & 4x6 Forwarding (28/28 PASS)
+./run_phase4_tests.sh   # Dual-Port RAM & MemClass Arbiter (13/13 PASS)
+./run_phase5_tests.sh   # Double-Buffered NPU & Core Integration (20/20 PASS)
+./run_phase6_tests.sh   # RV32I Compliance (38/38) & 32x32 GEMM Benchmark (PASS)
+```
+
+### 5.3 Overall Performance Comparison ($32 \times 32$ Matrix Multiplication)
+
+$$\text{Speedup} = \frac{\text{Baseline Execution Cycles}}{\text{Accelerated Cycles}}$$
+
+| Kernel Execution Mode | Execution Cycles | Wall-Clock Speedup | Key Microarchitectural Characteristic |
+| :--- | :---: | :---: | :--- |
+| **1. Pure Scalar Software (RV32I)** | **~1,550,000 cycles** | $1.0\times$ (Baseline) | Triple-nested software loops with software-emulated multiplication (~45 cycles/inner product). |
+| **2. Single-Core CPU + Single-Buffered NPU** | **186,433 cycles** | **~8.3x Faster** | Hardware MAC computes at 1 MAC/cycle, but transfers and compute are strictly sequential. |
+| **3. Superscalar Core + Double-Buffered NPU** | **88,524 cycles** | **~17.5x Faster**<br>*(~2.11x vs Single NPU)* | **Dual-issue CPU ($\text{IPC} \le 2.0$)**, **Dual-Channel DMA (64 bits/cycle)**, **Ping-Pong Double Buffering**, and **Command FIFO**. |
+
+---
+
+## 6. Detailed Documentation
+
+- **Superscalar Architectural Plan & Specification**: [`Superscalar/PLAN.md`](Superscalar/PLAN.md)
+- **Superscalar Workspace & Phase Regressions**: [`Superscalar/README.md`](Superscalar/README.md)
+- **Technical Explanation of Baseline NPU vs. Superscalar NPU**: [`Superscalar/explanation.md`](Superscalar/explanation.md)
+- **Production C Driver for Superscalar NPU**: [`Superscalar/sw/npu_driver_superscalar.h`](Superscalar/sw/npu_driver_superscalar.h)
+- **Complete Project Architectural Summary**: [`PROJECT_SUMMARY.md`](PROJECT_SUMMARY.md)
 - **NPU Architecture & Implementation Specification**: [`PROJECT_SUMMARY_NPU.md`](PROJECT_SUMMARY_NPU.md)
-- **Detailed Test Results Report**: [`converting_into_NPU/TEST_RESULTS.md`](converting_into_NPU/TEST_RESULTS.md)
-- **C Software Driver**: [`converting_into_NPU/tests/npu_driver.h`](converting_into_NPU/tests/npu_driver.h)
+- **Single-Core NPU Test Results Report**: [`converting_into_NPU/TEST_RESULTS.md`](converting_into_NPU/TEST_RESULTS.md)
 - **Pipeline Architecture & Hazards**: [`docs/PIPELINE.md`](docs/PIPELINE.md)
 
 ---
